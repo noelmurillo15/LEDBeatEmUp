@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////////
-//  LED (B)Eat Em Up//  
+//  LED (B)Eat Em Up
 //  Summary: Eat all the Green dots before the Red dots take over
 //  Blue = Player
 //  Green = Edible
@@ -21,7 +21,7 @@
 const int rs = 7, en = 8, d4 = 9, d5 = 10, d6 = 11, d7 = 12;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-int delayval = 500; // delay for half a second
+int delayval = 100; // How Fast Pixels Decay (1/10 second)
 uint32_t green = pixels.Color(0, 64, 0);
 uint32_t red = pixels.Color(64, 0, 0);
 uint32_t blue = pixels.Color(0, 0, 128);
@@ -46,9 +46,9 @@ void setup() {
   //  Prepare to Start    
   pixels.show();
   lcd.clear();
-  lcd.setCursor(5, 0);
-  lcd.print("Start!");
-  delay(delayval * 5);
+  lcd.setCursor(2, 0);
+  lcd.print("Let's Start!");
+  delay(5000);
   lcd.clear();    
 }
 
@@ -76,7 +76,7 @@ void Reset() {
   lcd.setCursor(0, 1);
   lcd.print("By: Allan");
   score = 0;
-  player = 0;
+  player = 20;
 
   //  NeoPixels  
   pixels.begin();  
@@ -107,8 +107,8 @@ void PixelDecay() {
       uint8_t b = lowByte(color);
       uint8_t r = lowByte(color >> 16);
       uint8_t g = lowByte(color >> 8);
-      if (g > 5) {
-        g -= 4;
+      if (g > 2) {
+        g -= 1;
       }
       else {
         r = 64;
@@ -146,6 +146,7 @@ void CheckGamePads() {
     if((player - 1) >= 0){player -= 1;}  
   }
   if(old!=player){
+    OneSheeld.delay(100);
     pixels.setPixelColor(old, white);
     pixels.setPixelColor(player, blue); 
   }  

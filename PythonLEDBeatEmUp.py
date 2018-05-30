@@ -2,12 +2,13 @@ import time
 import serial
 import random
 
-arduinoData = serial.Serial('COM3', 9600,timeout=0)
-print("Initializing\n")
 
-delayval = 1
-gameInProgress = False
-time.sleep(2)
+print("Initializing\n")
+arduinoData = serial.Serial('COM3', 9600,timeout=0) # Establish serial connection
+gameInProgress = False   #   Has the game started?
+delayval = 1                        #   How Fast Green Dots Appear(~Difficulty)
+time.sleep(2)                       #   Wait for Arduino to Catch up
+
 
 var = input("Start the Game Y/N?")
 if(var == 'Y' or var == 'y'):
@@ -16,9 +17,9 @@ if(var == 'Y' or var == 'y'):
     arduinoData.write(b'Y')
     time.sleep(delayval*5)
 
+
 while gameInProgress:
     #   Serial Write
-    #print("Python Random Number : ")
     x = random.randint(0,39)
     arduinoData.write(bytes([x]))    
     # Serial Read
