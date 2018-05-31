@@ -37,25 +37,32 @@ int delayval = 100;
 //////////////////////////////////////////////////////////////////////////////////
 //  Methods
 //////////////////////////////////////////////////////////////////////////////////
-void setup() {    
+void setup() {
   Start();
 
+  ///////////////////////////////////
   //  Wait for Python
+  ///////////////////////////////////
   while (!altSerial.available()) {}
   char c = altSerial.read();
   if (c != 'Y') {
     altSerial.write(99);
   }
   else {
-    altSerial.write(1);
+    altSerial.println("Connection Established..!");
   }
 
-  //OneSheeld.begin();
-  //Serial.begin(115200);
-  //OneSheeld.disableCallbacksInterrupts();
-  //OneSheeld.waitForAppConnection();
+  ///////////////////////////////////
+  //  Wait for OneSheeld (Bluetooth)
+  ///////////////////////////////////
+  OneSheeld.begin();
+  Serial.begin(115200);
+  OneSheeld.disableCallbacksInterrupts();
+  OneSheeld.waitForAppConnection();
 
-  //  Prepare to Start
+  ///////////////////////////////////
+  //  Prepare Displays
+  ///////////////////////////////////
   pixels.show();
   lcd.clear();
   lcd.setCursor(2, 0);
@@ -73,29 +80,49 @@ void loop() {
 }
 
 //////////////////////////////////////////////////////////////////////////////////
-//  Functions
+//  Helper Functions
 //////////////////////////////////////////////////////////////////////////////////
 void Start() {
   altSerial.begin(115200);
-  
+
+  ///////////////////////////////////
   //  LiquidCrystal Display
+  ///////////////////////////////////
+  byte smiley[8] = {
+    0b00000,
+    0b01010,
+    0b01010,
+    0b01010,
+    0b00000,
+    0b10001,
+    0b10001,
+    0b11111
+  };
+
+  lcd.createChar(0, smiley);
   lcd.begin(16, 2);
   lcd.print("LED (B)Eat Em Up");
   lcd.setCursor(0, 1);
-  lcd.print("By: Allan");  
+  lcd.print("By: Allan");
+  lcd.setCursor(14, 1);
+  lcd.write((uint8_t)0);
 
+  ///////////////////////////////////
   //  NeoPixels
+  ///////////////////////////////////
   pixels.begin();
   for (int i = 0; i < NUMPIXELS; i++) {
     pixels.setPixelColor(i, white);
   }
   pixels.show();
 
+  ///////////////////////////////////
   //  Player Data
+  ///////////////////////////////////
   score = 0;
   playerPos = 20;
   playerCol = blue;
-  pixels.setPixelColor(playerPos, playerCol);  
+  pixels.setPixelColor(playerPos, playerCol);
 }
 
 void ModifyScore() {
