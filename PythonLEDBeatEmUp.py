@@ -5,11 +5,11 @@ import threading
 import serial.tools.list_ports
 # coding: utf8
 
-print("Initializing")
+print("\nInitializing")
 # Establish serial connection
 arduinoData = serial.Serial('COM3', 115200,timeout=0)
 gameInProgress = False   #   Has the game started?
-delayval = 1                        #   How Fast Green Dots Appear(~Difficulty)
+delayval = .5                        #   How Fast Green Dots Appear(~Difficulty)
 time.sleep(2)                       #   Wait for Arduino to Catch up
 
 #   List of active com ports, just in case
@@ -24,8 +24,7 @@ if(var == 'Y' or var == 'y'):
     arduinoData.write(b'Y')
     time.sleep(delayval)
     msg = (arduinoData.readline().strip())
-    if(len(msg) > 0 and msg != ' '):
-        print(msg) 
+    if(len(msg) > 0 and msg != ' '):        
         if(msg == b'\x07'):
             gameInProgress = False
             print("Python: Connection Failed...")
@@ -33,24 +32,27 @@ if(var == 'Y' or var == 'y'):
             gameInProgress = True
             print("Python: Connection is Successful!")
             time.sleep(4)
+        print("Arduino : ", msg)
 
-def sendDataArduino():
+#  Send data to Arduino every second
+def sendDataArduino():  
     threading.Timer(delayval, sendDataArduino).start()
     x = random.randint(0,39)
     arduinoData.write(bytes([x]))
-    #print("Python:", x )
+    print("Python : ", x )
 
 sendDataArduino()
+
 # Waiting on Serial Read (Gameplay via Bt serial blocks Pc serial)
 while gameInProgress:    
     try:
         msg = (arduinoData.readline().strip())        
         if(len(msg) > 0):
-            print(msg) 
+            print("Arduino : ", msg) 
             if(msg == b'\x07'): gameInProgress = False
     except serial.SerialException:
         print("Python: Uh Oh Serial Error")
-        time.sleep(delayval)
+    time.sleep(.1)
     
 # Game Close
 else:

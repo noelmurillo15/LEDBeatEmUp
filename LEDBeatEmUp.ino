@@ -24,7 +24,7 @@ LiquidCrystal lcd(2, 3, 4, 5, 11, 7);
 AltSoftSerial altSerial;  //  Pins 8&9
 
 uint32_t red = pixels.Color(64, 0, 0);
-uint32_t white = pixels.Color(1, 1, 1);
+uint32_t white = pixels.Color(2, 2, 2);
 uint32_t black = pixels.Color(0, 0, 0);
 uint32_t blue = pixels.Color(0, 0, 64);
 uint32_t green = pixels.Color(0, 64, 0);
@@ -33,15 +33,13 @@ uint32_t orange = pixels.Color(32, 32, 0);
 uint32_t playerCol = blue;
 int playerPos = 0;
 int score = 0;
-int delayval = 0;
+int delayval = 100;
 
 //////////////////////////////////////////////////////////////////////////////////
 //  Methods
 //////////////////////////////////////////////////////////////////////////////////
-void setup() {
-  //OneSheeld.begin();
-  //Serial.begin(115200);
-  //OneSheeld.disableCallbacksInterrupts();
+void setup() {  
+  
   Start();
 
   ///////////////////////////////////
@@ -60,8 +58,10 @@ void setup() {
 
   ///////////////////////////////////
   //  Wait for OneSheeld (Bluetooth)
-  ///////////////////////////////////
-
+  ///////////////////////////////////  
+  OneSheeld.begin();
+  //Serial.begin(115200);
+  //OneSheeld.disableCallbacksInterrupts();
   //OneSheeld.waitForAppConnection();
 
   ///////////////////////////////////
@@ -128,6 +128,7 @@ void Start() {
   //  Player Data
   ///////////////////////////////////
   score = 0;
+  delayval = 100;
   playerPos = 20;
   playerCol = blue;
   pixels.setPixelColor(playerPos, playerCol);
@@ -146,7 +147,7 @@ void ParsePythonData() {
       altSerial.flush();
       return;
     }
-    if (CheckColorCount(white) > 8) {
+    if (CheckColorCount(white) > 4) {
       int x = random(0, 59);
       if (x < NUMPIXELS && pixels.getPixelColor(x) == white) {
         ModifyScore();
@@ -160,12 +161,18 @@ void ParsePythonData() {
       pixels.setPixelColor(getFirstColor(white), green);
       altSerial.write(3);  //  Quit
       altSerial.flush();
+      if(delayval >1)
+        delayval--;
       return;
     }
   }
+  if(delayval >1)
+    delayval--;
   if (CheckColorCount(black) > 38) {
     altSerial.write(7);  //  Quit
     altSerial.flush();
+    delay(5000);
+    asm volatile ("  jmp 0"); //  Soft Reset
   }
 }
 //////////////////////////////////////////////////////////////
@@ -252,6 +259,7 @@ void CheckGamePads() {
   ///////////////////////////////////
   pixels.setPixelColor(playerPos, playerCol);
   if (old != playerPos) {
+    OneSheeld.delay(100);
     pixels.setPixelColor(old, white);
   }
   pixels.show();
