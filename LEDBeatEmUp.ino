@@ -3,88 +3,99 @@
 //  Summary: Eat all the Green dots before the Red dots take over
 //  Blue = Player
 //  Green = Edible
-//  Red = Wall
+//  Red = Not Good
 //  Created By: Allan Murillo
 //////////////////////////////////////////////////////////////////////////////////
 #define CUSTOM_SETTINGS
 #define INCLUDE_GAMEPAD_SHIELD
 #include <OneSheeld.h>
 #include <LiquidCrystal.h>
+#include <AltSoftSerial.h>
 #include <Adafruit_NeoPixel.h>
 #define NUMPIXELS  40
 #define PIN        6
 
-
 //////////////////////////////////////////////////////////////////////////////////
 //  Variables
 //////////////////////////////////////////////////////////////////////////////////
-const int rs = 7, en = 8, d4 = 9, d5 = 10, d6 = 11, d7 = 12;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-int delayval = 100; // How Fast Pixels Decay (1/10 second)
-uint32_t green = pixels.Color(0, 64, 0);
-uint32_t red = pixels.Color(64, 0, 0);
-uint32_t blue = pixels.Color(0, 0, 128);
-uint32_t white = pixels.Color(2, 2, 2);
-int player = 0;
-int score = 0;
+LiquidCrystal lcd(2, 3, 4, 5, 11, 7);
+AltSoftSerial altSerial;  //  Pins 8&9
 
+uint32_t red = pixels.Color(64, 0, 0);
+uint32_t white = pixels.Color(2, 2, 2);
+uint32_t black = pixels.Color(0, 0, 0);
+uint32_t blue = pixels.Color(0, 0, 64);
+uint32_t green = pixels.Color(0, 64, 0);
+uint32_t orange = pixels.Color(32, 32, 0);
+
+uint32_t playerCol = blue;
+int playerPos = 0;
+int score = 0;
+int delayval = 100;
 
 //////////////////////////////////////////////////////////////////////////////////
 //  Methods
 //////////////////////////////////////////////////////////////////////////////////
-void setup() {  
-  Reset();
+void setup() {    
+  Start();
 
   //  Wait for Python
-  while (!Serial.available()) {}
-  char c = Serial.read();
+  while (!altSerial.available()) {}
+  char c = altSerial.read();
   if (c != 'Y') {
-    Serial.write(99);
+    altSerial.write(99);
+  }
+  else {
+    altSerial.write(1);
   }
 
-  //  Prepare to Start    
+  //OneSheeld.begin();
+  //Serial.begin(115200);
+  //OneSheeld.disableCallbacksInterrupts();
+  //OneSheeld.waitForAppConnection();
+
+  //  Prepare to Start
   pixels.show();
   lcd.clear();
   lcd.setCursor(2, 0);
   lcd.print("Let's Start!");
   delay(5000);
-  lcd.clear();    
+  lcd.clear();
 }
 
 void loop() {
-  PixelDecay(); 
-  DisplayScreen();   
-  pixels.show(); 
-  delay(delayval); 
-  ParsePythonData(); 
-  CheckGamePads();  
+  CheckGamePads();
+  PixelDecay();
+  DisplayScreen();
+  ParsePythonData();
   pixels.show();
 }
-
 
 //////////////////////////////////////////////////////////////////////////////////
 //  Functions
 //////////////////////////////////////////////////////////////////////////////////
-void Reset() {    
-  OneSheeld.begin();  
-  Serial.begin(9600);
-   
-  //  LiquidCrystal Display  
-  lcd.begin(16, 2);  
+void Start() {
+  altSerial.begin(115200);
+  
+  //  LiquidCrystal Display
+  lcd.begin(16, 2);
   lcd.print("LED (B)Eat Em Up");
   lcd.setCursor(0, 1);
-  lcd.print("By: Allan");
-  score = 0;
-  player = 20;
+  lcd.print("By: Allan");  
 
-  //  NeoPixels  
-  pixels.begin();  
+  //  NeoPixels
+  pixels.begin();
   for (int i = 0; i < NUMPIXELS; i++) {
-    pixels.setPixelColor(i, white); //  Turns on all pixels
-  }  
-  pixels.show();  //  This sends the information to the pixels
-  pixels.setPixelColor(player, blue); 
+    pixels.setPixelColor(i, white);
+  }
+  pixels.show();
+
+  //  Player Data
+  score = 0;
+  playerPos = 20;
+  playerCol = blue;
+  pixels.setPixelColor(playerPos, playerCol);  
 }
 
 void ModifyScore() {
@@ -103,51 +114,90 @@ void DisplayScreen() {
 void PixelDecay() {
   for (int i = 0; i < NUMPIXELS; i++) {
     uint32_t color = pixels.getPixelColor(i);
-    if (color != white && color != blue && color != red) {      
-      uint8_t b = lowByte(color);
+    if (color == playerCol) {
+      continue;
+    }
+    if (color == black) {
+      continue;
+    }
+    if (color == white) {
+      continue;
+    }
+    if (color == red) {
+      pixels.setPixelColor(i, black);
+    }
+    else {
       uint8_t r = lowByte(color >> 16);
       uint8_t g = lowByte(color >> 8);
       if (g > 2) {
         g -= 1;
+        if (g <= 2) {
+          g = 0;
+          r = 3;
+        }
       }
-      else {
-        r = 64;
-        g = 0;
-        b = 0;
+      else if (r > 2) {
+        r += 1;
       }
-      pixels.setPixelColor(i, r, g, b);
+      pixels.setPixelColor(i, r, g, 0);
     }
-  }  
+  }
 }
 
-void ParsePythonData() {  
-  while (Serial.available() > 0) {   
-    ModifyScore();        
-    char hexValue = Serial.read();
-    if (pixels.getPixelColor(hexValue) == white) {      
+void ParsePythonData() {
+  //OneSheeld.delay(30);
+  //altSerial.begin(115200);
+  altSerial.listen();
+  if (altSerial.available() > 0) {
+    ModifyScore();
+    char hexValue = altSerial.read();
+    if (pixels.getPixelColor(hexValue) == white) {
       pixels.setPixelColor(hexValue, green);
-    }    
-    Serial.write(hexValue);
+    }
+    altSerial.write(hexValue);
   }
+  //altSerial.end();
+  delay(50);
 }
 
 void CheckGamePads() {
-  int old = player;
+  int old = playerPos;
   if (GamePad.isUpPressed()) {
-    if((player + 8) < NUMPIXELS){player += 8;}    
+    if ((playerPos + 8) < NUMPIXELS) {
+      playerPos += 8;
+    }
   }
   if (GamePad.isDownPressed()) {
-    if((player - 8) >= 0){player -= 8;} 
+    if ((playerPos - 8) >= 0) {
+      playerPos -= 8;
+    }
   }
   if (GamePad.isLeftPressed()) {
-    if((player + 1) < NUMPIXELS){player += 1;}  
+    if ((playerPos + 1) < NUMPIXELS) {
+      playerPos += 1;
+    }
   }
   if (GamePad.isRightPressed()) {
-    if((player - 1) >= 0){player -= 1;}  
+    if ((playerPos - 1) >= 0) {
+      playerPos -= 1;
+    }
   }
-  if(old!=player){
-    OneSheeld.delay(100);
+
+  if (GamePad.isGreenPressed()) {
+    pixels.setPixelColor(playerPos, green);
+  }
+  if (GamePad.isRedPressed()) {
+    pixels.setPixelColor(playerPos, playerCol);
+  }
+  if (GamePad.isBluePressed()) {
+    pixels.setPixelColor(playerPos, blue);
+  }
+  if (GamePad.isOrangePressed()) {
+    pixels.setPixelColor(playerPos, orange);
+  }
+
+  if (old != playerPos) {
     pixels.setPixelColor(old, white);
-    pixels.setPixelColor(player, blue); 
-  }  
+    pixels.setPixelColor(playerPos, blue);
+  }
 }
