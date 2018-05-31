@@ -8,6 +8,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 #define CUSTOM_SETTINGS
 #define INCLUDE_GAMEPAD_SHIELD
+#define INCLUDE_TERMINAL_SHIELD
 #include <OneSheeld.h>
 #include <LiquidCrystal.h>
 #include <AltSoftSerial.h>
@@ -23,7 +24,7 @@ LiquidCrystal lcd(2, 3, 4, 5, 11, 7);
 AltSoftSerial altSerial;  //  Pins 8&9
 
 uint32_t red = pixels.Color(64, 0, 0);
-uint32_t white = pixels.Color(2, 2, 2);
+uint32_t white = pixels.Color(1, 1, 1);
 uint32_t black = pixels.Color(0, 0, 0);
 uint32_t blue = pixels.Color(0, 0, 64);
 uint32_t green = pixels.Color(0, 64, 0);
@@ -32,12 +33,15 @@ uint32_t orange = pixels.Color(32, 32, 0);
 uint32_t playerCol = blue;
 int playerPos = 0;
 int score = 0;
-int delayval = 100;
+int delayval = 0;
 
 //////////////////////////////////////////////////////////////////////////////////
 //  Methods
 //////////////////////////////////////////////////////////////////////////////////
 void setup() {
+  //OneSheeld.begin();
+  //Serial.begin(115200);
+  //OneSheeld.disableCallbacksInterrupts();
   Start();
 
   ///////////////////////////////////
@@ -45,20 +49,20 @@ void setup() {
   ///////////////////////////////////
   while (!altSerial.available()) {}
   char c = altSerial.read();
-  if (c != 'Y') {
-    altSerial.write(99);
+  if (c != 'Y') { //  '\r' ascii - Enter
+    altSerial.write(7);
+    altSerial.flush();
   }
   else {
-    altSerial.println("Connection Established..!");
+    altSerial.write(1);
+    altSerial.flush();
   }
 
   ///////////////////////////////////
   //  Wait for OneSheeld (Bluetooth)
   ///////////////////////////////////
-  OneSheeld.begin();
-  Serial.begin(115200);
-  OneSheeld.disableCallbacksInterrupts();
-  OneSheeld.waitForAppConnection();
+
+  //OneSheeld.waitForAppConnection();
 
   ///////////////////////////////////
   //  Prepare Displays
@@ -72,21 +76,25 @@ void setup() {
 }
 
 void loop() {
+  DisplayScreen();
   CheckGamePads();
   PixelDecay();
-  DisplayScreen();
   ParsePythonData();
   pixels.show();
+  delay(delayval);
 }
 
 //////////////////////////////////////////////////////////////////////////////////
-//  Helper Functions
+//  Main Functions
 //////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+//  Start -
+//////////////////////////////////////////////////////////////
 void Start() {
   altSerial.begin(115200);
 
   ///////////////////////////////////
-  //  LiquidCrystal Display
+  //  Liquid Crystal Display
   ///////////////////////////////////
   byte smiley[8] = {
     0b00000,
@@ -108,7 +116,7 @@ void Start() {
   lcd.write((uint8_t)0);
 
   ///////////////////////////////////
-  //  NeoPixels
+  //  NeoPixels - resets color to white
   ///////////////////////////////////
   pixels.begin();
   for (int i = 0; i < NUMPIXELS; i++) {
@@ -124,20 +132,45 @@ void Start() {
   playerCol = blue;
   pixels.setPixelColor(playerPos, playerCol);
 }
-
-void ModifyScore() {
-  score += 1;
+//////////////////////////////////////////////////////////////
+//  Python -
+//////////////////////////////////////////////////////////////
+void ParsePythonData() {
+  altSerial.listen();
+  while (altSerial.available() > 0) {
+    char hexValue = altSerial.read();
+    if (pixels.getPixelColor(hexValue) == white) {
+      ModifyScore();
+      pixels.setPixelColor(hexValue, green);
+      altSerial.write(1);
+      altSerial.flush();
+      return;
+    }
+    if (CheckColorCount(white) > 8) {
+      int x = random(0, 59);
+      if (x < NUMPIXELS && pixels.getPixelColor(x) == white) {
+        ModifyScore();
+        pixels.setPixelColor(x, green);
+        altSerial.write(2);
+        altSerial.flush();
+      }
+      return;
+    }
+    if (CheckColorCount(white) > 0) {
+      pixels.setPixelColor(getFirstColor(white), green);
+      altSerial.write(3);  //  Quit
+      altSerial.flush();
+      return;
+    }
+  }
+  if (CheckColorCount(black) > 38) {
+    altSerial.write(7);  //  Quit
+    altSerial.flush();
+  }
 }
-
-void DisplayScreen() {
-  lcd.setCursor(0, 1);
-  lcd.print("Score:");
-  lcd.print(score);
-  lcd.setCursor(12, 1);
-  lcd.print("T");
-  lcd.print(millis() / 1000);
-}
-
+//////////////////////////////////////////////////////////////
+//  Pixels -
+//////////////////////////////////////////////////////////////
 void PixelDecay() {
   for (int i = 0; i < NUMPIXELS; i++) {
     uint32_t color = pixels.getPixelColor(i);
@@ -169,62 +202,99 @@ void PixelDecay() {
       pixels.setPixelColor(i, r, g, 0);
     }
   }
+  pixels.show();
 }
-
-void ParsePythonData() {
-  //OneSheeld.delay(30);
-  //altSerial.begin(115200);
-  altSerial.listen();
-  if (altSerial.available() > 0) {
-    ModifyScore();
-    char hexValue = altSerial.read();
-    if (pixels.getPixelColor(hexValue) == white) {
-      pixels.setPixelColor(hexValue, green);
-    }
-    altSerial.write(hexValue);
-  }
-  //altSerial.end();
-  delay(50);
-}
-
+//////////////////////////////////////////////////////////////
+//  Gamepad (Bluetooth Smartphone) -
+//////////////////////////////////////////////////////////////
 void CheckGamePads() {
+  ///////////////////////////////////
+  //  GamePad Color Buttons
+  ///////////////////////////////////
+  if (GamePad.isRedPressed()) {
+    playerCol = red;
+  }
+  if (GamePad.isBluePressed()) {
+    playerCol = blue;
+  }
+  if (GamePad.isGreenPressed()) {
+    playerCol = green;
+  }
+  if (GamePad.isOrangePressed()) {
+    playerCol = orange;
+  }
+  ///////////////////////////////////
+  //  GamePad D-Pad
+  ///////////////////////////////////
   int old = playerPos;
   if (GamePad.isUpPressed()) {
-    if ((playerPos + 8) < NUMPIXELS) {
+    if ((playerPos + 8) < NUMPIXELS && pixels.getPixelColor(playerPos + 8) != black) {
       playerPos += 8;
     }
   }
   if (GamePad.isDownPressed()) {
-    if ((playerPos - 8) >= 0) {
+    if ((playerPos - 8) >= 0 && pixels.getPixelColor(playerPos - 8) != black) {
       playerPos -= 8;
     }
   }
   if (GamePad.isLeftPressed()) {
-    if ((playerPos + 1) < NUMPIXELS) {
+    if ((playerPos + 1) < NUMPIXELS && pixels.getPixelColor(playerPos + 1) != black) {
       playerPos += 1;
     }
   }
   if (GamePad.isRightPressed()) {
-    if ((playerPos - 1) >= 0) {
+    if ((playerPos - 1) >= 0 && pixels.getPixelColor(playerPos - 1) != black) {
       playerPos -= 1;
     }
   }
-
-  if (GamePad.isGreenPressed()) {
-    pixels.setPixelColor(playerPos, green);
-  }
-  if (GamePad.isRedPressed()) {
-    pixels.setPixelColor(playerPos, playerCol);
-  }
-  if (GamePad.isBluePressed()) {
-    pixels.setPixelColor(playerPos, blue);
-  }
-  if (GamePad.isOrangePressed()) {
-    pixels.setPixelColor(playerPos, orange);
-  }
-
+  ///////////////////////////////////
+  //  Input Change
+  ///////////////////////////////////
+  pixels.setPixelColor(playerPos, playerCol);
   if (old != playerPos) {
     pixels.setPixelColor(old, white);
-    pixels.setPixelColor(playerPos, blue);
   }
+  pixels.show();
+}
+//////////////////////////////////////////////////////////////////////////////////
+//  Helper Functions
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+//  Score -
+//////////////////////////////////////////////////////////////
+void ModifyScore() {
+  score += 1;
+}
+//////////////////////////////////////////////////////////////
+//  DisplayScreen -
+//////////////////////////////////////////////////////////////
+void DisplayScreen() {
+  lcd.setCursor(0, 1);
+  lcd.print("Score:");
+  lcd.print(score);
+  lcd.setCursor(12, 1);
+  lcd.print("T");
+  lcd.print(millis() / 1000);
+}
+//////////////////////////////////////////////////////////////
+//  Pixels -
+//////////////////////////////////////////////////////////////
+int getFirstColor(uint32_t col) {
+  int count = 0;
+  for (int i = 0; i < NUMPIXELS; i++) {
+    if (pixels.getPixelColor(i) == col) {
+      count = i;
+      break;
+    }
+  }
+  return count;
+}
+int CheckColorCount(uint32_t col) {
+  int count = 0;
+  for (int i = 0; i < NUMPIXELS; i++) {
+    if (pixels.getPixelColor(i) == col) {
+      count++;
+    }
+  }
+  return count;
 }
