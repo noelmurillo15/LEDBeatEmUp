@@ -9,11 +9,13 @@
 #define CUSTOM_SETTINGS
 #define INCLUDE_GAMEPAD_SHIELD
 #define INCLUDE_TERMINAL_SHIELD
+#include <EEPROM.h>
 #include <OneSheeld.h>
 #include <LiquidCrystal.h>
 #include <AltSoftSerial.h>
 #include <Adafruit_NeoPixel.h>
 #define NUMPIXELS  40
+#define BUZZERPIN  12
 #define PIN        6
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -33,14 +35,18 @@ uint32_t orange = pixels.Color(32, 32, 0);
 uint32_t playerCol = blue;
 int playerPos = 0;
 int score = 0;
-int delayval = 100;
+int delayval = 90;
 
 //////////////////////////////////////////////////////////////////////////////////
 //  Methods
 //////////////////////////////////////////////////////////////////////////////////
-void setup() {  
-  
+void setup() {
+  pinMode(BUZZERPIN, OUTPUT);
+  ///////////////////////////////////
+  //  Initialize
+  ///////////////////////////////////
   Start();
+  tone(BUZZERPIN, 'a', 250);
 
   ///////////////////////////////////
   //  Wait for Python
@@ -54,15 +60,13 @@ void setup() {
   else {
     altSerial.write(1);
     altSerial.flush();
+    tone(BUZZERPIN, 'a', 250);
   }
 
   ///////////////////////////////////
   //  Wait for OneSheeld (Bluetooth)
-  ///////////////////////////////////  
-  OneSheeld.begin();
-  //Serial.begin(115200);
-  //OneSheeld.disableCallbacksInterrupts();
-  //OneSheeld.waitForAppConnection();
+  ///////////////////////////////////
+  //OneSheeld.begin();
 
   ///////////////////////////////////
   //  Prepare Displays
@@ -71,6 +75,7 @@ void setup() {
   lcd.clear();
   lcd.setCursor(2, 0);
   lcd.print("Let's Start!");
+  tone(BUZZERPIN, 'a', 250);
   delay(5000);
   lcd.clear();
 }
@@ -94,26 +99,24 @@ void Start() {
   altSerial.begin(115200);
 
   ///////////////////////////////////
+  //  Arduino Flash Memory Read
+  ///////////////////////////////////
+  int addr = 0;
+  EEPROM.get(addr, score);
+
+  ///////////////////////////////////
   //  Liquid Crystal Display
   ///////////////////////////////////
-  byte smiley[8] = {
-    0b00000,
-    0b01010,
-    0b01010,
-    0b01010,
-    0b00000,
-    0b10001,
-    0b10001,
-    0b11111
-  };
-
-  lcd.createChar(0, smiley);
   lcd.begin(16, 2);
   lcd.print("LED (B)Eat Em Up");
   lcd.setCursor(0, 1);
-  lcd.print("By: Allan");
-  lcd.setCursor(14, 1);
-  lcd.write((uint8_t)0);
+  if (score == 0) {
+    lcd.print("By: Allan");
+  }
+  else {
+    lcd.print("High Score: ");
+    lcd.print(score);
+  }
 
   ///////////////////////////////////
   //  NeoPixels - resets color to white
@@ -147,34 +150,34 @@ void ParsePythonData() {
       altSerial.flush();
       return;
     }
-    if (CheckColorCount(white) > 4) {
-      int x = random(0, 59);
-      if (x < NUMPIXELS && pixels.getPixelColor(x) == white) {
-        ModifyScore();
-        pixels.setPixelColor(x, green);
+    if (CheckColorCount(white) > 10) {
+      int r = random(0, 39);
+      if (pixels.getPixelColor(r) == white) {
+        pixels.setPixelColor(r, green);
         altSerial.write(2);
         altSerial.flush();
+        ModifyScore();
+        if (delayval > 1)
+          delayval--;
+        return;
       }
-      return;
     }
-    if (CheckColorCount(white) > 0) {
+    if (CheckColorCount(black) <= 38) {
       pixels.setPixelColor(getFirstColor(white), green);
-      altSerial.write(3);  //  Quit
+      ModifyScore();
+      altSerial.write(2);
       altSerial.flush();
-      if(delayval >1)
+      if (delayval > 1)
         delayval--;
       return;
     }
   }
-  if(delayval >1)
-    delayval--;
+
   if (CheckColorCount(black) > 38) {
-    altSerial.write(7);  //  Quit
-    altSerial.flush();
-    delay(5000);
-    asm volatile ("  jmp 0"); //  Soft Reset
+    Quit();
   }
 }
+
 //////////////////////////////////////////////////////////////
 //  Pixels -
 //////////////////////////////////////////////////////////////
@@ -230,6 +233,7 @@ void CheckGamePads() {
   if (GamePad.isOrangePressed()) {
     playerCol = orange;
   }
+
   ///////////////////////////////////
   //  GamePad D-Pad
   ///////////////////////////////////
@@ -254,6 +258,7 @@ void CheckGamePads() {
       playerPos -= 1;
     }
   }
+
   ///////////////////////////////////
   //  Input Change
   ///////////////////////////////////
@@ -267,6 +272,19 @@ void CheckGamePads() {
 //////////////////////////////////////////////////////////////////////////////////
 //  Helper Functions
 //////////////////////////////////////////////////////////////////////////////////
+void Quit() {
+  altSerial.write(7);  //  Quit code
+  altSerial.flush();
+
+  //  Save score to memory
+  int addr = 0;
+  EEPROM.put(addr, score);
+  tone(BUZZERPIN, 'a', 100);
+  delay(5000);
+
+  //  Soft Reset
+  asm volatile ("  jmp 0");
+}
 //////////////////////////////////////////////////////////////
 //  Score -
 //////////////////////////////////////////////////////////////
@@ -288,14 +306,12 @@ void DisplayScreen() {
 //  Pixels -
 //////////////////////////////////////////////////////////////
 int getFirstColor(uint32_t col) {
-  int count = 0;
   for (int i = 0; i < NUMPIXELS; i++) {
     if (pixels.getPixelColor(i) == col) {
-      count = i;
-      break;
+      return i;
     }
   }
-  return count;
+  return 40;
 }
 int CheckColorCount(uint32_t col) {
   int count = 0;
