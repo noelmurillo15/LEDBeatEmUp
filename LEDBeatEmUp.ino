@@ -35,7 +35,8 @@ uint32_t orange = pixels.Color(32, 32, 0);
 uint32_t playerCol = blue;
 int playerPos = 0;
 int score = 0;
-int delayval = 90;
+int oldScore = 0;
+int delayval = 100;
 
 //////////////////////////////////////////////////////////////////////////////////
 //  Methods
@@ -116,6 +117,7 @@ void Start() {
   else {
     lcd.print("High Score: ");
     lcd.print(score);
+    oldScore = score;
   }
 
   ///////////////////////////////////
@@ -143,6 +145,7 @@ void ParsePythonData() {
   altSerial.listen();
   while (altSerial.available() > 0) {
     char hexValue = altSerial.read();
+    CheckInput(hexValue);
     if (pixels.getPixelColor(hexValue) == white) {
       ModifyScore();
       pixels.setPixelColor(hexValue, green);
@@ -264,7 +267,7 @@ void CheckGamePads() {
   ///////////////////////////////////
   pixels.setPixelColor(playerPos, playerCol);
   if (old != playerPos) {
-    OneSheeld.delay(100);
+    //OneSheeld.delay(100);
     pixels.setPixelColor(old, white);
   }
   pixels.show();
@@ -277,8 +280,11 @@ void Quit() {
   altSerial.flush();
 
   //  Save score to memory
-  int addr = 0;
-  EEPROM.put(addr, score);
+  if (score > oldScore) {
+    int addr = 0;
+    EEPROM.put(addr, score);
+  }
+
   tone(BUZZERPIN, 'a', 100);
   delay(5000);
 
@@ -321,4 +327,35 @@ int CheckColorCount(uint32_t col) {
     }
   }
   return count;
+}
+//////////////////////////////////////////////////////////////
+//  Python Input
+//////////////////////////////////////////////////////////////
+void CheckInput(char x) {
+  int old = playerPos;
+  altSerial.write(x);
+  altSerial.flush();
+  if (x == 'H') {
+    if ((playerPos + 8) < NUMPIXELS && pixels.getPixelColor(playerPos + 8) != black) {
+      playerPos += 8;
+    }
+  }
+  if (x == 'P') {
+    if ((playerPos - 8) >= 0 && pixels.getPixelColor(playerPos - 8) != black) {
+      playerPos -= 8;
+    }
+  }
+  if (x == 'K') {
+    if ((playerPos + 1) < NUMPIXELS && pixels.getPixelColor(playerPos + 1) != black) {
+      playerPos += 1;
+    }
+  }
+  if (x == 'M') {
+    if ((playerPos - 1) >= 0 && pixels.getPixelColor(playerPos - 1) != black) {
+      playerPos -= 1;
+    }
+  }
+  if (old != playerPos) {
+    pixels.setPixelColor(old, white);
+  }
 }
