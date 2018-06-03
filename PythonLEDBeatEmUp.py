@@ -50,15 +50,7 @@ def inputThread(inputEvent):
         if event_is_set:                                    # if input was detected
             arduinoData.write(userInput)        # send code to arduino
             inputEvent.clear()                           # sets internal flag to False            
-        else:
-            try:    # else try to catch any msgs from arduino
-                msg = (arduinoData.readline().strip())        
-                if(len(msg) > 0):
-                    print("Arduino : ", msg) 
-                    if(msg == b'\x07'): gameInProgress = False
-            except serial.SerialException:
-                print("Python: Uh Oh Serial Error")
-
+        
 #Initialize Threads and Start Game
 if(gameInProgress): 
     #   Start Input Event
@@ -87,6 +79,14 @@ while gameInProgress:
             elif key == b'M':   #   Right
                 userInput = key    
                 inputEvent.set()
+    else:
+            try:    # else try to catch any msgs from arduino
+                msg = (arduinoData.readline().strip())        
+                if(len(msg) > 0):
+                    print("Arduino : ", msg) 
+                    if(msg == b'\x07'): gameInProgress = False
+            except serial.SerialException:
+                print("Python: Uh Oh Serial Error")
     time.sleep(inputDelay)
 
 print("Exiting...")
