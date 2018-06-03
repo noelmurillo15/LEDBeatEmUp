@@ -26,18 +26,17 @@ LiquidCrystal lcd(2, 3, 4, 5, 11, 7);
 AltSoftSerial altSerial;  //  Pins 8&9
 
 uint32_t red = pixels.Color(64, 0, 0);
+uint32_t blue = pixels.Color(0, 0, 64);
 uint32_t white = pixels.Color(2, 2, 2);
 uint32_t black = pixels.Color(0, 0, 0);
-uint32_t blue = pixels.Color(0, 0, 64);
 uint32_t green = pixels.Color(0, 64, 0);
-uint32_t orange = pixels.Color(32, 32, 0);
 
 uint32_t playerCol = blue;
 int playerPos = 0;
 int score = 0;
 int oldScore = 0;
 int delayval = 100;
-
+int timer = millis();
 //////////////////////////////////////////////////////////////////////////////////
 //  Methods
 //////////////////////////////////////////////////////////////////////////////////
@@ -82,11 +81,14 @@ void setup() {
 }
 
 void loop() {
+  if(timer > (millis() / 1000) + 5)
+    delayval--;
+
   DisplayScreen();
   CheckGamePads();
   PixelDecay();
   ParsePythonData();
-  pixels.show();
+  pixels.show();  
   delay(delayval);
 }
 
@@ -145,33 +147,25 @@ void ParsePythonData() {
   altSerial.listen();
   while (altSerial.available() > 0) {
     char hexValue = altSerial.read();
-    CheckInput(hexValue);
+    if(hexValue == ' ')return;
+    if (CheckTerminalInput(hexValue))return;
+    
     if (pixels.getPixelColor(hexValue) == white) {
       ModifyScore();
       pixels.setPixelColor(hexValue, green);
-      altSerial.write(1);
-      altSerial.flush();
       return;
     }
-    if (CheckColorCount(white) > 10) {
+    if (CheckColorCount(white) > 8) {
       int r = random(0, 39);
       if (pixels.getPixelColor(r) == white) {
         pixels.setPixelColor(r, green);
-        altSerial.write(2);
-        altSerial.flush();
         ModifyScore();
-        if (delayval > 1)
-          delayval--;
         return;
       }
     }
     if (CheckColorCount(black) <= 38) {
       pixels.setPixelColor(getFirstColor(white), green);
       ModifyScore();
-      altSerial.write(2);
-      altSerial.flush();
-      if (delayval > 1)
-        delayval--;
       return;
     }
   }
@@ -190,12 +184,12 @@ void PixelDecay() {
     if (color == playerCol) {
       continue;
     }
-    if (color == black) {
-      continue;
-    }
     if (color == white) {
       continue;
     }
+    if (color == black) {
+      continue;
+    }    
     if (color == red) {
       pixels.setPixelColor(i, black);
     }
@@ -218,59 +212,50 @@ void PixelDecay() {
   pixels.show();
 }
 //////////////////////////////////////////////////////////////
-//  Gamepad (Bluetooth Smartphone) -
+//  Bluetooth  Input
 //////////////////////////////////////////////////////////////
 void CheckGamePads() {
   ///////////////////////////////////
-  //  GamePad Color Buttons
-  ///////////////////////////////////
-  if (GamePad.isRedPressed()) {
-    playerCol = red;
-  }
-  if (GamePad.isBluePressed()) {
-    playerCol = blue;
-  }
-  if (GamePad.isGreenPressed()) {
-    playerCol = green;
-  }
-  if (GamePad.isOrangePressed()) {
-    playerCol = orange;
-  }
-
-  ///////////////////////////////////
   //  GamePad D-Pad
   ///////////////////////////////////
-  int old = playerPos;
-  if (GamePad.isUpPressed()) {
-    if ((playerPos + 8) < NUMPIXELS && pixels.getPixelColor(playerPos + 8) != black) {
-      playerPos += 8;
-    }
-  }
+  if (GamePad.isUpPressed()) 
+    PlayerMovement(8);  //  Up
+
   if (GamePad.isDownPressed()) {
-    if ((playerPos - 8) >= 0 && pixels.getPixelColor(playerPos - 8) != black) {
-      playerPos -= 8;
-    }
+    PlayerMovement(-8); //  Down
   }
   if (GamePad.isLeftPressed()) {
-    if ((playerPos + 1) < NUMPIXELS && pixels.getPixelColor(playerPos + 1) != black) {
-      playerPos += 1;
-    }
+    PlayerMovement(1);  //  Left
   }
   if (GamePad.isRightPressed()) {
-    if ((playerPos - 1) >= 0 && pixels.getPixelColor(playerPos - 1) != black) {
-      playerPos -= 1;
-    }
+    PlayerMovement(-1); //  Right
   }
-
-  ///////////////////////////////////
-  //  Input Change
-  ///////////////////////////////////
-  pixels.setPixelColor(playerPos, playerCol);
-  if (old != playerPos) {
-    //OneSheeld.delay(100);
-    pixels.setPixelColor(old, white);
+}
+//////////////////////////////////////////////////////////////
+//  Python Input
+//////////////////////////////////////////////////////////////
+bool CheckTerminalInput(char x) {
+  int b = false;
+  int old = playerPos;
+  altSerial.write(x);
+  altSerial.flush();
+  if (x == 'H') {
+    PlayerMovement(8);
+    b = true;
   }
-  pixels.show();
+  if (x == 'P') {
+    PlayerMovement(-8);
+    b = true;
+  }
+  if (x == 'K') {
+    PlayerMovement(1);
+    b = true;
+  }
+  if (x == 'M') {
+    PlayerMovement(-1);
+    b = true;
+  }
+  return b;
 }
 //////////////////////////////////////////////////////////////////////////////////
 //  Helper Functions
@@ -285,6 +270,7 @@ void Quit() {
     EEPROM.put(addr, score);
   }
 
+  //  Beep
   tone(BUZZERPIN, 'a', 100);
   delay(5000);
 
@@ -329,33 +315,19 @@ int CheckColorCount(uint32_t col) {
   return count;
 }
 //////////////////////////////////////////////////////////////
-//  Python Input
+//  Player Movement
 //////////////////////////////////////////////////////////////
-void CheckInput(char x) {
+void PlayerMovement(int x) {
   int old = playerPos;
-  altSerial.write(x);
-  altSerial.flush();
-  if (x == 'H') {
-    if ((playerPos + 8) < NUMPIXELS && pixels.getPixelColor(playerPos + 8) != black) {
-      playerPos += 8;
-    }
-  }
-  if (x == 'P') {
-    if ((playerPos - 8) >= 0 && pixels.getPixelColor(playerPos - 8) != black) {
-      playerPos -= 8;
-    }
-  }
-  if (x == 'K') {
-    if ((playerPos + 1) < NUMPIXELS && pixels.getPixelColor(playerPos + 1) != black) {
-      playerPos += 1;
-    }
-  }
-  if (x == 'M') {
-    if ((playerPos - 1) >= 0 && pixels.getPixelColor(playerPos - 1) != black) {
-      playerPos -= 1;
-    }
+  int temp = (playerPos + x);
+  if(temp < NUMPIXELS && temp >= 0){    
+    if(pixels.getPixelColor(temp) != black)
+      playerPos = temp;
   }
   if (old != playerPos) {
+    //if (OneSheeld())
+      //OneSheeld.delay(100);      
     pixels.setPixelColor(old, white);
   }
+  pixels.show();
 }
